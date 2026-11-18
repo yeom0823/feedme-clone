@@ -1,0 +1,591 @@
+<!--
+  prototype shell: the review chrome every prototype starts from.
+
+  Keep this comment in the prototype you grow from here: it is the contract,
+  and later turns work from that file rather than from this one.
+
+  Contract (extend product screens; keep the review shell):
+  - Product:  .sh-stage contains only end-user product UI. Keep review notes,
+               rationale, instructions, and approval controls in conversation.
+  - Screens:  <section data-screen="slug" data-title="Label"> inside .sh-stage.
+               The selector, arrow keys, and #hash routing build themselves.
+               Use one option per product destination or distinct surface,
+               named by its product role. Keep baselines, variants, comparison
+               labels, steps, indexes, and progress out of names and states.
+               Links may use href="#slug".
+  - States:   "Default" is automatic. A screen declares only representative
+               presets in data-states="Empty,Error". Use natural, screen-specific
+               names. Reserve presets for important multi-step results, forced
+               data or errors, or materially different structure; keep one-click
+               and transient states as interactions. Use data-when="Empty" on
+               preset-only elements. Call prototypeShell.setState("Name") on
+               entry and setState("Default") on exit, including when repeated
+               actions cross a preset condition.
+  - Viewport: "vp (m)" cycles full / 390 / 768. The 390 preset is a
+               fixed-height, internally scrolling phone frame. Start a
+               mobile-first prototype by adding class="sh-vp-390" to <body>
+               (or a bootstrap classList.add before the chrome script runs).
+  - Pinning:  keep in-frame bars (tab bars, CTAs) inside the phone with
+               position: sticky; position: fixed pins to the browser window.
+  - Tokens:   replace the project-tokens block with project tokens copied
+               verbatim. Map differing names to --background, --foreground, and
+               --font afterwards; replace network fonts with a system stack and
+               note that substitution. Without a design system, keep this
+               palette as the finished style. When the project ships dark
+               tokens, copy them under .sh-theme-dark, which the shell sets
+               on both the root element and body, so :root.sh-theme-dark and
+               body.sh-theme-dark work too. A .dark class or a
+               prefers-color-scheme media query copied verbatim would follow
+               the reviewer's system instead of the toggle.
+  - Theme:    the light / dark switch (t) changes the product surface only.
+               It appears only when a .sh-theme-dark rule declares dark tokens,
+               so a prototype without them carries no theme control. Prototypes
+               always load light; the review bar keeps its own dark styling in
+               both themes so it still reads as chrome.
+  - Placeholders: .wf-pic stands in for pictures the prototype has no real
+               files for. Use real text everywhere text belongs.
+
+  - Chrome:   Keep exactly the screen selector, selected-screen state selector,
+               viewport cycle, and theme toggle.
+
+  Self-contained by design: no build, no framework, no network.
+-->
+<meta charset="utf-8">
+<title>저장한 글 — 프로토타입</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ── project tokens: the project's own, or this minimal set as-is ── */
+  /* copied verbatim from app/globals.css; Inter/Geist (next/font) replaced by system stack */
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
+    --font: Inter, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .sh-theme-dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+  }
+
+  /* ── product styles ── */
+  .app { display: flex; flex-direction: column; min-height: calc(100dvh - 64px); max-width: 760px; margin: 0 auto; padding: 8px 0 0; color: var(--foreground) }
+  .sh-vp-390 .app { min-height: 100% }
+  .app-main { flex: 1; display: flex; flex-direction: column; gap: 20px }
+  .app-header { display: flex; justify-content: flex-end; padding: 4px 0 }
+  .hero h1 { font-size: 44px; line-height: 1.1; font-weight: 800; margin: 0 0 8px; letter-spacing: -.02em }
+  .hero p { margin: 0; color: var(--muted-foreground); font-size: 15px }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: calc(var(--radius) * .8); font: 500 14px var(--font); border: 1px solid transparent; cursor: pointer; white-space: nowrap; background: none; color: var(--foreground) }
+  .btn svg { width: 16px; height: 16px; flex: none }
+  .btn-default { background: var(--primary); color: var(--primary-foreground) }
+  .btn-outline { border-color: var(--border); background: var(--background) }
+  .btn-outline:hover, .btn-ghost:hover { background: var(--accent) }
+  .btn-icon { width: 36px; padding: 0 }
+  .btn-sm { height: 32px; padding: 0 10px; font-size: 13px }
+  .btn-xs { height: 28px; padding: 0 8px; font-size: 13px }
+  .btn[disabled] { opacity: .5; pointer-events: none }
+  .input-group { display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 6px 0 12px; border: 1px solid var(--input); border-radius: var(--radius); background: color-mix(in oklch, var(--muted) 40%, transparent) }
+  .input-group:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent) }
+  .input-group[aria-invalid="true"] { border-color: var(--destructive) }
+  .input-group input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--foreground); font: 15px var(--font) }
+  .input-group .btn-icon { width: 32px; height: 32px }
+  .submit { background: var(--primary); color: var(--primary-foreground); border-radius: calc(var(--radius) * .7) }
+  .spin { animation: spin .8s linear infinite } @keyframes spin { to { transform: rotate(360deg) } }
+  .field-error { color: var(--destructive); font-size: 13px; margin: 6px 0 0 }
+  .result { border-top: 1px solid var(--border); padding-top: 20px; display: flex; flex-direction: column; gap: 14px }
+  .result-top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between }
+  .result-head { display: flex; flex-direction: column; gap: 4px; min-width: 0 }
+  .result-head h2 { margin: 0; font-size: 22px; line-height: 1.3; text-wrap: balance }
+  .byline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--muted-foreground) }
+  .byline a { color: inherit; text-decoration: underline; text-underline-offset: 3px; word-break: break-all }
+  .dot::before { content: "·" }
+  .copy-col { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; position: relative }
+  .split { display: inline-flex }
+  .split .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0 }
+  .split .btn:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0; width: 32px; padding: 0 }
+  .copy-note { font-size: 12px; color: var(--muted-foreground) }
+  .menu { position: absolute; top: 36px; right: 0; z-index: 20; min-width: 190px; padding: 4px; border: 1px solid var(--border); border-radius: calc(var(--radius) * .8); background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px oklch(0 0 0 / 15%) }
+  .menu button { display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: calc(var(--radius) * .6); background: none; color: inherit; font: 14px var(--font); cursor: pointer; text-align: left }
+  .menu button:hover, .menu button:focus-visible { background: var(--accent); outline: 0 }
+  .menu svg { width: 16px; height: 16px }
+  .prompt-toggle { align-self: flex-start }
+  .prompt-box { display: flex; flex-direction: column; gap: 8px }
+  .textarea-wrap { position: relative }
+  .textarea { width: 100%; min-height: 64px; resize: vertical; padding: 10px 40px 10px 12px; border: 1px solid var(--input); border-radius: calc(var(--radius) * .8); background: color-mix(in oklch, var(--muted) 40%, transparent); color: var(--foreground); font: 14px/1.5 var(--font); outline: none }
+  .textarea:focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent) }
+  .textarea-wrap .btn-icon { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px }
+  .chip { height: 28px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--background); color: var(--foreground); font: 13px var(--font); cursor: pointer }
+  .chip[aria-pressed="true"] { background: var(--secondary); border-color: var(--ring) }
+  .tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: calc(var(--radius) * .8); background: var(--muted); align-self: flex-start }
+  .tabs button { height: 28px; padding: 0 12px; border: 0; border-radius: calc(var(--radius) * .6); background: none; color: var(--muted-foreground); font: 500 13px var(--font); cursor: pointer }
+  .tabs button[aria-selected="true"] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px oklch(0 0 0 / 10%) }
+  .raw { margin: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: calc(var(--radius) * .8); background: color-mix(in oklch, var(--muted) 40%, transparent); font: 13px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 560px; overflow: auto }
+  .alert { display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: start; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card) }
+  .alert svg { width: 18px; height: 18px; color: var(--destructive); margin-top: 2px }
+  .alert h4 { margin: 0; font-size: 14px; color: var(--destructive) } .alert p { margin: 2px 0 0; font-size: 14px; color: var(--muted-foreground) }
+  .skeleton { background: var(--muted); border-radius: calc(var(--radius) * .6); animation: pulse 1.6s ease-in-out infinite }
+  @keyframes pulse { 50% { opacity: .5 } }
+  .md { font-size: 15px; line-height: 1.7; overflow-wrap: anywhere }
+  .md h2 { font-size: 19px; margin: 24px 0 8px } .md h3 { font-size: 16px; margin: 20px 0 6px }
+  .md p { margin: 0 0 12px } .md ul { margin: 0 0 12px; padding-left: 22px }
+  .md a { color: var(--foreground); text-decoration: underline; text-underline-offset: 3px }
+  .md code { font: .9em var(--mono); background: var(--muted); padding: 1px 5px; border-radius: 4px }
+  .md pre { background: var(--muted); padding: 12px 14px; border-radius: calc(var(--radius) * .8); overflow-x: auto; font: 13px/1.6 var(--mono) }
+  .md pre code { background: none; padding: 0 }
+  .md blockquote { margin: 0 0 12px; padding-left: 14px; border-left: 3px solid var(--border); color: var(--muted-foreground) }
+  .md table { border-collapse: collapse; width: 100%; font-size: 14px; margin-bottom: 12px; display: block; overflow-x: auto }
+  .md th, .md td { border: 1px solid var(--border); padding: 6px 10px; text-align: left }
+  .app-footer { text-align: center; padding: 40px 0 16px; font-size: 12px; color: var(--muted-foreground); display: flex; flex-direction: column; gap: 4px }
+  .app-footer a { color: inherit; text-decoration: none } .app-footer a:hover { color: var(--foreground) }
+  .app-footer small { font-size: 11px }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; max-width: min(420px, calc(100vw - 32px)); padding: 12px 16px; border-radius: var(--radius); background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); box-shadow: 0 8px 24px oklch(0 0 0 / 15%); font-size: 14px }
+  .toast b { display: block; font-weight: 600 } .toast span { color: var(--muted-foreground) }
+  .sh-vp-390 .toast { bottom: 40px }
+  .sh-vp-390 .hero h1 { font-size: 36px }
+  .sh-vp-390 .result-top { flex-direction: column }
+  .sh-vp-390 .copy-col { align-self: stretch; align-items: stretch }
+  .sh-vp-390 .split .btn:first-child { flex: 1 }
+  /* ── saved-articles additions ── */
+  .app-header { gap: 4px; align-items: center }
+  a.btn { text-decoration: none }
+  .nav-link { height: 32px; padding: 0 10px; font-size: 13px }
+  .back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted-foreground); text-decoration: none; cursor: pointer; background: none; border: 0; padding: 0; font-family: var(--font) }
+  .back:hover { color: var(--foreground) }
+  .back svg { width: 14px; height: 14px }
+  .page-title { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -.01em }
+  .page-sub { margin: 4px 0 0; font-size: 14px; color: var(--muted-foreground) }
+  .actions { display: flex; gap: 8px; align-items: flex-start }
+  .btn-save[aria-pressed="true"] { color: var(--muted-foreground) }
+  .list { display: flex; flex-direction: column; border-top: 1px solid var(--border) }
+  .item { display: flex; flex-direction: column; gap: 4px; padding: 14px 4px; border: 0; border-bottom: 1px solid var(--border); background: none; color: var(--foreground); text-align: left; cursor: pointer; font-family: var(--font) }
+  .item:hover { background: color-mix(in oklch, var(--muted) 50%, transparent) }
+  .item b { font-size: 16px; font-weight: 600; line-height: 1.4; word-break: keep-all; overflow-wrap: anywhere }
+  .item span { font-size: 13px; color: var(--muted-foreground) }
+  .empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 16px; border: 1px dashed var(--border); border-radius: var(--radius); text-align: center }
+  .empty svg { width: 28px; height: 28px; color: var(--muted-foreground) }
+  .empty h3 { margin: 0; font-size: 16px } .empty p { margin: 0; font-size: 14px; color: var(--muted-foreground) }
+  .saved-at { font-size: 12px; color: var(--muted-foreground) }
+  .btn-danger { color: var(--destructive) }
+  .btn-destructive { background: var(--destructive); color: oklch(0.985 0 0) }
+  .dialog-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: oklch(0 0 0 / 50%) }
+  .dialog { width: min(420px, 100%); padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--background); color: var(--foreground); display: flex; flex-direction: column; gap: 8px }
+  .dialog h3 { margin: 0; font-size: 17px } .dialog p { margin: 0; font-size: 14px; color: var(--muted-foreground) }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px }
+  .auth { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 0 }
+  .card { width: min(380px, 100%); border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 24px; display: flex; flex-direction: column; gap: 18px }
+  .card h2 { margin: 0; font-size: 18px; font-weight: 500 } .card .desc { margin: 4px 0 0; font-size: 14px; color: var(--muted-foreground) }
+  .field { display: grid; gap: 6px } .field label { font-size: 14px; font-weight: 500 }
+  .input { height: 36px; padding: 0 10px; border: 1px solid var(--input); border-radius: calc(var(--radius) * .8); background: color-mix(in oklch, var(--muted) 40%, transparent); color: var(--foreground); font: 14px var(--font) }
+  .notice { font-size: 13px; color: var(--muted-foreground); padding: 10px 12px; border-radius: calc(var(--radius) * .8); background: var(--muted) }
+  .sh-vp-390 .actions { align-self: stretch } .sh-vp-390 .actions .copy-col { flex: 1 }
+  .sh-vp-390 .page-title { font-size: 24px }
+  /* ── review chrome (sh-*): keep; extend product styles elsewhere ── */
+  * { box-sizing: border-box }
+  body {
+    margin: 0; padding: 0 0 40px;
+    background: var(--background, #f6f6f6); color: var(--foreground, #3a3a3a);
+    font-family: var(--font, system-ui, sans-serif);
+  }
+  .sh-bar {
+    position: sticky; top: 0; z-index: 999;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px; background: #191a1c; color: #d7d7d7;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .sh-bar b, .sh-control-label { color: #8a8f98; font-weight: 500 }
+  .sh-control { display: inline-flex; gap: 5px; align-items: center }
+  .sh-bar button {
+    border: 1px solid #3a3d42; background: none; color: inherit;
+    font: inherit; padding: 2px 9px; border-radius: 99px; cursor: pointer;
+  }
+  .sh-bar select {
+    width: 170px; border: 1px solid #3a3d42; background: #232428; color: inherit;
+    font: inherit; padding: 3px 28px 3px 9px; border-radius: 7px; cursor: pointer;
+    color-scheme: dark;
+  }
+  #sh-screen { width: 190px }
+  .sh-bar button.on { background: #d7d7d7; color: #191a1c; border-color: #d7d7d7 }
+  .sh-theme { display: inline-flex; border: 1px solid #3a3d42; border-radius: 99px; overflow: hidden }
+  .sh-theme button { border: 0; border-radius: 0; padding: 2px 10px }
+  .sh-spacer { flex: 1 }
+  .sh-stage { max-width: 960px; margin: 0 auto; padding: 12px 16px 0 }
+  [hidden] { display: none !important }
+
+  /* viewport presets */
+  .sh-vp-390 .sh-stage {
+    max-width: 390px; background: var(--background, #f6f6f6);
+    border: 10px solid #191a1c; border-radius: 28px;
+    padding: 16px 12px; height: min(844px, calc(100dvh - 52px));
+    overflow-y: auto; margin-top: 12px;
+  }
+  .sh-vp-768 .sh-stage {
+    max-width: 768px; border: 1px solid #c4c4c4; border-radius: 12px;
+    padding: 16px; margin-top: 12px;
+  }
+
+  /* placeholders */
+  .wf-pic  { border-radius: 4px; background:
+             repeating-linear-gradient(45deg, #e9e9e9, #e9e9e9 6px, #f2f2f2 6px, #f2f2f2 12px) }
+  .sh-theme-dark .wf-pic { background: repeating-linear-gradient(45deg,
+             color-mix(in srgb, var(--foreground) 16%, transparent) 0 6px,
+             color-mix(in srgb, var(--foreground) 8%, transparent) 6px 12px) }
+</style>
+
+<header class="sh-bar">
+  <b>proto</b>
+  <label class="sh-control"><span class="sh-control-label">screen</span><select id="sh-screen"></select></label>
+  <span class="sh-spacer"></span>
+  <label class="sh-control"><span class="sh-control-label">state</span><select id="sh-state"></select></label>
+  <button id="sh-vp">vp: full (m)</button>
+  <div class="sh-theme" id="sh-theme" role="group" aria-label="theme (t)" hidden>
+    <button data-theme="light">light</button><button data-theme="dark">dark</button>
+  </div>
+</header>
+
+<main class="sh-stage">
+  <section data-screen="home" data-title="홈 (변환 결과)" data-states="로그아웃 상태,저장됨">
+    <div class="app">
+      <header class="app-header" data-nav></header>
+      <div class="app-main">
+        <div class="hero"><h1>FEED-ME</h1><p>어떤 URL이든, Markdown으로.</p></div>
+        <div class="input-group" data-component="InputGroup">
+          <input id="url" type="url" aria-label="URL" data-component="InputGroupInput" value="https://en.wikipedia.org/wiki/Markdown">
+          <button class="btn btn-ghost btn-icon" aria-label="입력 지우기" data-component="InputGroupButton" data-icon="x"></button>
+          <button class="btn btn-icon submit" aria-label="가져오기" data-component="InputGroupButton" data-icon="arrow"></button>
+        </div>
+        <div id="home-out"></div>
+      </div>
+      <footer class="app-footer"><div>© 2026 feed-me <span class="dot"></span> <a href="#">Feedback</a> <span class="dot"></span> <a href="#">GitHub</a></div></footer>
+    </div>
+  </section>
+
+  <section data-screen="saved" data-title="저장한 글" data-states="비어 있음">
+    <div class="app">
+      <header class="app-header" data-nav></header>
+      <div class="app-main">
+        <a class="back" href="#home" data-icon-before="chevL">FEED-ME로 돌아가기</a>
+        <div><h1 class="page-title">저장한 글</h1><p class="page-sub" id="saved-count"></p></div>
+        <div id="saved-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen="detail" data-title="저장한 글 보기" data-states="삭제 확인">
+    <div class="app">
+      <header class="app-header" data-nav></header>
+      <div class="app-main">
+        <a class="back" href="#saved" data-icon-before="chevL">저장한 글</a>
+        <div id="detail-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <section data-screen="login" data-title="로그인">
+    <div class="app">
+      <header class="app-header" data-nav></header>
+      <div class="auth">
+        <form class="card" id="login-form" data-component="Card">
+          <div><h2>로그인</h2><p class="desc">이메일과 비밀번호로 로그인하세요</p></div>
+          <p class="notice" id="login-notice">글을 저장하려면 로그인이 필요합니다. 로그인하면 보던 글로 돌아갑니다.</p>
+          <div class="field"><label for="em">이메일</label><input class="input" id="em" type="email" value="minji.park@example.com" data-component="Input"></div>
+          <div class="field"><label for="pw">비밀번호</label><input class="input" id="pw" type="password" value="password123" data-component="Input"></div>
+          <button class="btn btn-default" type="submit" data-component="Button">로그인</button>
+          <p class="desc" style="text-align:center">계정이 없으신가요? <a href="#login" style="color:inherit">회원가입</a></p>
+        </form>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" data-component="Sonner" role="status" hidden></div>
+<div id="dialog-root"></div>
+<script>
+  const stage = document.querySelector('.sh-stage');
+  const screens = [...stage.querySelectorAll('[data-screen]')];
+  const screenSelect = document.getElementById('sh-screen');
+  const stateSelect = document.getElementById('sh-state');
+  const vpBtn = document.getElementById('sh-vp');
+  const themeCtl = document.getElementById('sh-theme');
+  const themeBtns = [...themeCtl.querySelectorAll('button')];
+  let current = null;
+  let currentStates = [];
+
+  screens.forEach(s => {
+    const option = document.createElement('option');
+    option.textContent = s.dataset.title || s.dataset.screen;
+    option.value = s.dataset.screen;
+    screenSelect.append(option);
+  });
+  screenSelect.onchange = () => show(screenSelect.value);
+
+  function show(slug) {
+    current = screens.find(s => s.dataset.screen === slug) || screens[0];
+    screens.forEach(s => s.hidden = s !== current);
+    screenSelect.value = current.dataset.screen;
+    history.replaceState(null, '', '#' + current.dataset.screen);
+    buildStates();
+  }
+
+  function buildStates() {
+    const declared = (current.dataset.states || '').split(',').map(x => x.trim()).filter(Boolean);
+    currentStates = ['Default', ...declared.filter(name => name !== 'Default')];
+    stateSelect.innerHTML = '';
+    currentStates.forEach(name => {
+      const option = document.createElement('option');
+      option.textContent = name;
+      option.value = name;
+      stateSelect.append(option);
+    });
+    applyState('Default');
+  }
+
+  function applyState(name) {
+    const active = currentStates.includes(name) ? name : 'Default';
+    current.querySelectorAll('[data-when]').forEach(el => {
+      el.hidden = !el.dataset.when.split(',').map(x => x.trim()).includes(active);
+    });
+    stateSelect.value = active;
+  }
+  stateSelect.onchange = () => applyState(stateSelect.value);
+
+  window.prototypeShell = {
+    showScreen: show,
+    setState: applyState,
+    getScreen: () => current?.dataset.screen,
+    getState: () => stateSelect.value
+  };
+
+  const VPS = ['full', '390', '768'];
+  let vp = VPS.find(v => document.body.classList.contains('sh-vp-' + v)) || 'full';
+  function applyVp() {
+    VPS.forEach(v => document.body.classList.toggle('sh-vp-' + v, v === vp && v !== 'full'));
+    vpBtn.textContent = 'vp: ' + vp + ' (m)';
+    vpBtn.classList.toggle('on', vp !== 'full');
+  }
+  vpBtn.onclick = () => { vp = VPS[(VPS.indexOf(vp) + 1) % VPS.length]; applyVp(); };
+  applyVp();
+
+  const hasDark = [...document.styleSheets].some(sheet => {
+    try {
+      return [...sheet.cssRules].some(rule => (rule.selectorText || '')
+        .split(',').some(part => /\.sh-theme-dark$/.test(part.trim())));
+    } catch { return false }
+  });
+  let dark = false;
+  function applyTheme() {
+    document.documentElement.classList.toggle('sh-theme-dark', dark);
+    document.body.classList.toggle('sh-theme-dark', dark);
+    themeBtns.forEach(b => b.classList.toggle('on', (b.dataset.theme === 'dark') === dark));
+  }
+  themeCtl.hidden = !hasDark;
+  themeBtns.forEach(b => b.onclick = () => { dark = b.dataset.theme === 'dark'; applyTheme(); });
+  applyTheme();
+
+  addEventListener('keydown', e => {
+    if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const i = screens.indexOf(current);
+    if (e.key === 'ArrowRight') show(screens[(i + 1) % screens.length].dataset.screen);
+    if (e.key === 'ArrowLeft') show(screens[(i - 1 + screens.length) % screens.length].dataset.screen);
+    if (e.key === 'm') vpBtn.click();
+    if (e.key === 't' && !themeCtl.hidden) { dark = !dark; applyTheme(); }
+  });
+
+  addEventListener('hashchange', () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+</script>
+<script>
+  /* ── product prototype logic (dummy data, no network) ── */
+  const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const I = {
+    x: svg('<path d="M18 6 6 18M6 6l12 12"/>'),
+    arrow: svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
+    moon: svg('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
+    sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+    copy: svg('<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>'),
+    check: svg('<path d="M20 6 9 17l-5-5"/>'),
+    chev: svg('<path d="m6 9 6 6 6-6"/>'),
+    chevL: svg('<path d="m15 6-6 6 6 6"/>'),
+    chevR: svg('<path d="m9 6 6 6-6 6"/>'),
+    plus: svg('<path d="M12 5v14M5 12h14"/>'),
+    dl: svg('<path d="M12 15V3M7 10l5 5 5-5M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>'),
+    ext: svg('<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'),
+    bookmark: svg('<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>'),
+    trash: svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>')
+  };
+  const WIKI_HTML = `<p><strong>Markdown</strong> is a <a href="#">lightweight markup language</a> for creating <a href="#">formatted text</a> using a <a href="#">plain-text editor</a>. John Gruber created Markdown in 2004 as an easy-to-read markup language. Markdown is widely used for blogging and instant messaging, and also used elsewhere in online forums, collaborative software, documentation pages, and readme files.</p>
+<h2>History</h2><p>In 2002, Aaron Swartz created atx and referred to it as "the true structured text format". Gruber created the Markdown language in 2004 with Swartz as his "sounding board".</p>
+<blockquote>Markdown is a text-to-HTML conversion tool for web writers.</blockquote>
+<h2>Rise and divergence</h2><ul><li><strong>CommonMark</strong> — a standard, unambiguous syntax specification (2014)</li><li><strong>GitHub Flavored Markdown</strong> — tables, task lists, strikethrough, autolinks</li></ul>`;
+  const WIKI_MD = `**Markdown** is a [lightweight markup language](https://en.wikipedia.org/wiki/Lightweight_markup_language) for creating [formatted text](https://en.wikipedia.org/wiki/Formatted_text) using a plain-text editor. John Gruber created Markdown in 2004 as an easy-to-read markup language.
+
+## History
+
+In 2002, Aaron Swartz created atx and referred to it as "the true structured text format".
+
+> Markdown is a text-to-HTML conversion tool for web writers.
+
+## Rise and divergence
+
+- **CommonMark** — a standard, unambiguous syntax specification (2014)
+- **GitHub Flavored Markdown** — tables, task lists, strikethrough, autolinks`;
+  const generic = (lead) => ({ html: `<p>${lead}</p><h2>무엇이 문제였나</h2><p>처음 2년 동안은 컴포넌트를 화면마다 복사해 쓰는 방식이 충분히 빨랐습니다. 문제는 팀이 세 배로 늘어난 뒤에 드러났습니다.</p><ul><li>같은 버튼이 저장소 안에 17가지 변형으로 존재했다.</li><li>다크 모드 토큰이 화면마다 다르게 해석됐다.</li></ul>`, md: `${lead}\n\n## 무엇이 문제였나\n\n처음 2년 동안은 컴포넌트를 화면마다 복사해 쓰는 방식이 충분히 빨랐습니다.\n\n- 같은 버튼이 저장소 안에 17가지 변형으로 존재했다.\n- 다크 모드 토큰이 화면마다 다르게 해석됐다.` });
+
+  const WIKI = { id: 'wiki', url: 'https://en.wikipedia.org/wiki/Markdown', title: 'Markdown', author: 'Wikipedia', site: 'Wikipedia', savedAt: '2026년 11월 18일', html: WIKI_HTML, md: WIKI_MD };
+  const SEED = [
+    { id: 'pg', url: 'https://supabase.com/blog/postgres-bill-62-percent', title: 'How we cut our Postgres bill by 62% without changing a single query', author: 'Paul Copplestone', site: 'Supabase Blog', savedAt: '2026년 11월 17일', ...generic('Last quarter our database bill crossed a line we had promised ourselves it never would. This is what we changed, in order of impact.') },
+    { id: 'toss', url: 'https://toss.tech/article/design-system-rebuild-2026', title: '토스 프론트엔드 챕터가 디자인 시스템을 처음부터 다시 만든 이유: 3년 동안의 시행착오와 남은 숙제', author: '', site: 'toss.tech', savedAt: '2026년 11월 12일', ...generic('디자인 시스템을 처음부터 다시 만들기로 한 건 기술 부채 때문만은 아니었습니다.') },
+    { id: 'velog', url: 'https://velog.io/@hanbit_dev/next-16-cache-components-정리', title: 'Next.js 16 Cache Components, 3분 만에 정리하기', author: '', site: 'velog', savedAt: '2026년 10월 30일', ...generic('Next.js 16에서 가장 크게 바뀐 부분은 캐싱입니다. 이제는 명시적으로 캐시를 켜야 합니다.') }
+  ];
+
+  const $ = id => document.getElementById(id);
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  let signedIn = true, saved = [...SEED], currentId = 'pg', tab = 'preview', menuOpen = false, confirmOpen = false, toastTimer;
+  const isSaved = id => saved.some(s => s.id === id);
+  const byId = id => saved.find(s => s.id === id) || WIKI;
+  function setPreset(name) { if (prototypeShell.getState() !== name) prototypeShell.setState(name) }
+  function toast(title, desc) { const t = $('toast'); t.innerHTML = `<b>${title}</b>${desc ? `<span>${desc}</span>` : ''}`; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3000); }
+
+  function nav() {
+    const dark = document.body.classList.contains('sh-theme-dark');
+    const links = signedIn
+      ? `<a class="btn btn-ghost nav-link" href="#saved" data-component="Button">저장한 글</a><a class="btn btn-ghost nav-link" href="#" data-component="Button" onclick="return false">설정</a>`
+      : `<a class="btn btn-ghost nav-link" href="#login" data-component="Button">로그인</a>`;
+    document.querySelectorAll('[data-nav]').forEach(h => h.innerHTML = `${links}<button class="btn btn-ghost btn-icon theme-toggle" aria-label="${dark ? '라이트 모드로 전환' : '다크 모드로 전환'}" data-component="Button">${dark ? I.moon : I.sun}</button>`);
+    document.querySelectorAll('.theme-toggle').forEach(b => b.onclick = () => document.querySelector(`#sh-theme button[data-theme="${dark ? 'light' : 'dark'}"]`).click());
+  }
+
+  function articleView(a, mode) {
+    const names = a.author ? [a.author, a.site !== a.author ? a.site : ''] : [a.site];
+    const byline = names.filter(Boolean).map(x => `<span>${esc(x)}</span>`).join('<span class="dot"></span>');
+    const saveBtn = mode === 'home'
+      ? (isSaved(a.id) && signedIn
+        ? `<button class="btn btn-outline btn-sm btn-save" id="save" aria-pressed="true" data-component="Button">${I.check}저장됨</button>`
+        : `<button class="btn btn-outline btn-sm btn-save" id="save" aria-pressed="false" data-component="Button">${I.bookmark}저장</button>`)
+      : `<button class="btn btn-outline btn-sm btn-danger" id="del" aria-label="삭제" data-component="Button">${I.trash}삭제</button>`;
+    return `<article class="result">
+      <div class="result-top">
+        <header class="result-head"><h2>${esc(a.title)}</h2>
+          <div class="byline">${byline}<span class="dot"></span><a href="#" onclick="return false">${esc(a.url.replace(/^https?:\/\//, ''))}</a></div>
+          ${mode === 'detail' ? `<span class="saved-at">${a.savedAt} 저장</span>` : ''}</header>
+        <div class="actions">
+          ${saveBtn}
+          <div class="copy-col">
+            <div class="split" data-component="ButtonGroup">
+              <button class="btn btn-outline btn-sm copy" data-component="Button">${I.copy}복사하기</button>
+              <button class="btn btn-outline btn-sm more" aria-label="열기 옵션" aria-haspopup="menu" aria-expanded="${menuOpen}" data-component="DropdownMenuTrigger">${I.chev}</button>
+            </div>
+            ${menuOpen ? `<div class="menu" role="menu" data-component="DropdownMenuContent">
+              <button role="menuitem">${I.dl}마크다운 다운로드</button><button role="menuitem">${I.ext}ChatGPT에서 열기</button><button role="menuitem">${I.ext}Claude에서 열기</button></div>` : ''}
+          </div>
+        </div>
+      </div>
+      ${mode === 'home' ? `<button class="btn btn-ghost btn-xs prompt-toggle" data-component="CollapsibleTrigger">${I.plus}프롬프트 추가하기${I.chevR}</button>` : ''}
+      <div class="tabs" role="tablist" data-component="Tabs">
+        <button role="tab" data-t="preview" aria-selected="${tab === 'preview'}">미리보기</button>
+        <button role="tab" data-t="raw" aria-selected="${tab === 'raw'}">Markdown</button>
+      </div>
+      ${tab === 'preview' ? `<div class="md" data-component="new:MarkdownView">${a.html}</div>` : `<pre class="raw" data-component="new:MarkdownSource">${esc(a.md)}</pre>`}
+    </article>`;
+  }
+  function wireArticle(root) {
+    root.querySelector('.copy').onclick = () => { const b = root.querySelector('.copy'); b.innerHTML = I.check + '복사됨'; setTimeout(() => b.isConnected && (b.innerHTML = I.copy + '복사하기'), 1500); toast('복사했습니다', 'Markdown 본문이 클립보드에 있습니다.'); };
+    root.querySelector('.more').onclick = e => { e.stopPropagation(); menuOpen = !menuOpen; renderAll(); };
+    root.querySelectorAll('.menu button').forEach(b => b.onclick = () => { menuOpen = false; renderAll(); toast(b.textContent.trim().includes('다운로드') ? '다운로드했습니다' : `${b.textContent.trim().split('에서')[0]}를 새 탭에서 열었습니다`); });
+    root.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; renderAll(); });
+  }
+
+  function renderHome() {
+    const out = $('home-out');
+    out.innerHTML = articleView(WIKI, 'home');
+    wireArticle(out);
+    $('save').onclick = () => {
+      if (!signedIn) { location.hash = '#login'; return; }
+      if (isSaved('wiki')) return;
+      saved.unshift(WIKI); setPreset('저장됨'); renderAll(); toast('저장했습니다', '저장한 글에서 다시 볼 수 있습니다.');
+    };
+  }
+  function renderSaved() {
+    $('saved-count').textContent = saved.length ? `${saved.length}개 · 최근 저장한 순` : '';
+    const out = $('saved-out');
+    if (!saved.length) {
+      out.innerHTML = `<div class="empty" data-component="Empty">${I.bookmark}<h3>아직 저장한 글이 없습니다</h3><p>변환한 글의 결과 위에서 '저장'을 누르면 여기에 모입니다.</p><a class="btn btn-outline btn-sm" href="#home" data-component="Button">글 변환하러 가기</a></div>`;
+      return;
+    }
+    out.innerHTML = `<div class="list" data-component="new:SavedList">${saved.map(s => `<button class="item" data-id="${s.id}"><b>${esc(s.title)}</b><span>${esc(s.site)} · ${s.savedAt}</span></button>`).join('')}</div>`;
+    out.querySelectorAll('.item').forEach(b => b.onclick = () => { currentId = b.dataset.id; tab = 'preview'; menuOpen = false; location.hash = '#detail'; });
+  }
+  function renderDetail() {
+    const out = $('detail-out');
+    out.innerHTML = articleView(byId(currentId), 'detail');
+    wireArticle(out);
+    $('del').onclick = () => { confirmOpen = true; setPreset('삭제 확인'); renderDialog(); };
+    renderDialog();
+  }
+  function renderDialog() {
+    const root = $('dialog-root');
+    if (!(confirmOpen && prototypeShell.getScreen() === 'detail')) { root.innerHTML = ''; return; }
+    root.innerHTML = `<div class="dialog-backdrop"><div class="dialog" role="alertdialog" aria-modal="true" data-component="AlertDialog"><h3>이 글을 삭제할까요?</h3><p>저장한 글 목록에서 사라지고 되돌릴 수 없습니다. 원문 페이지는 그대로 남아 있습니다.</p><div class="dialog-actions"><button class="btn btn-outline btn-sm" id="d-cancel" data-component="AlertDialogCancel">취소</button><button class="btn btn-destructive btn-sm" id="d-ok" data-component="AlertDialogAction">삭제</button></div></div></div>`;
+    $('d-cancel').onclick = () => { confirmOpen = false; setPreset('Default'); renderDialog(); };
+    $('d-ok').onclick = () => { confirmOpen = false; saved = saved.filter(s => s.id !== currentId); setPreset('Default'); location.hash = '#saved'; toast('삭제했습니다'); };
+  }
+  function renderAll() {
+    nav();
+    const s = prototypeShell.getScreen();
+    if (s === 'home') renderHome();
+    if (s === 'saved') renderSaved();
+    if (s === 'detail') renderDetail();
+    if (s !== 'detail') $('dialog-root').innerHTML = '';
+  }
+  document.querySelectorAll('[data-icon]').forEach(b => b.innerHTML = I[b.dataset.icon]);
+  document.querySelectorAll('[data-icon-before]').forEach(a => a.insertAdjacentHTML('afterbegin', I[a.dataset.iconBefore]));
+  document.addEventListener('click', e => { if (menuOpen && !e.target.closest('.menu')) { menuOpen = false; renderAll(); } });
+
+  $('login-form').onsubmit = e => { e.preventDefault(); signedIn = true; location.hash = '#home'; toast('로그인했습니다', '보던 글로 돌아왔습니다. 저장을 다시 눌러 주세요.'); };
+
+  // review-bar presets
+  $('sh-state').addEventListener('change', e => {
+    const v = e.target.value, scr = prototypeShell.getScreen();
+    menuOpen = false; confirmOpen = false;
+    if (scr === 'home') { signedIn = v !== '로그아웃 상태'; saved = saved.filter(s => s.id !== 'wiki'); if (v === '저장됨') saved.unshift(WIKI); }
+    if (scr === 'saved') { signedIn = true; saved = v === '비어 있음' ? [] : (saved.length ? saved : [...SEED]); }
+    if (scr === 'detail') { signedIn = true; if (!saved.length) saved = [...SEED]; if (!isSaved(currentId)) currentId = saved[0].id; confirmOpen = v === '삭제 확인'; }
+    renderAll();
+  });
+  addEventListener('hashchange', () => { menuOpen = false; if (prototypeShell.getScreen() === 'detail' && !saved.length) saved = [...SEED]; renderAll(); });
+  $('sh-screen').addEventListener('change', renderAll);
+  new MutationObserver(nav).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  document.querySelector('#sh-theme button[data-theme="dark"]').click();
+  renderAll();
+</script>

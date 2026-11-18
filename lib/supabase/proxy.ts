@@ -38,8 +38,12 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims()
   const user = data?.claims
 
-  // Only /settings requires sign-in. The page itself re-checks the user on the server.
-  if (!user && request.nextUrl.pathname.startsWith('/settings')) {
+  // Only /settings and /saved require sign-in. Each page re-checks the user on the server.
+  const { pathname } = request.nextUrl
+  const isProtected = ['/settings', '/saved'].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  )
+  if (!user && isProtected) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.search = `?next=${encodeURIComponent(request.nextUrl.pathname)}`

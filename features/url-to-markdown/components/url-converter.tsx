@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowRightIcon, CircleAlertIcon, Loader2Icon, XIcon } from "lucide-react";
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,19 +12,9 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isHttpUrl } from "../lib/url";
-import { ExportActions } from "./export-actions";
-import { MarkdownView } from "./markdown-view";
+import { ArticleResult, type ConvertedPage } from "./article-result";
 import { PromptPanel } from "./prompt-panel";
-
-type Page = {
-  title: string;
-  author: string;
-  site: string;
-  url: string;
-  markdown: string;
-};
 
 type Status = "idle" | "invalid" | "loading" | "result" | "fetchfail" | "nocontent";
 
@@ -35,14 +25,20 @@ function setQuery(url: string) {
   window.history.replaceState(null, "", query);
 }
 
-export function UrlConverter({ initialUrl = "" }: { initialUrl?: string }) {
+type Props = {
+  initialUrl?: string;
+  /** 변환 결과가 보일 때 결과 머리의 복사 버튼 왼쪽에 놓을 action */
+  resultActions?: (page: ConvertedPage) => ReactNode;
+};
+
+export function UrlConverter({ initialUrl = "", resultActions }: Props) {
   const startUrl = initialUrl.trim();
   const [input, setInput] = useState(startUrl);
   const [status, setStatus] = useState<Status>(
     !startUrl ? "idle" : isHttpUrl(startUrl) ? "loading" : "invalid"
   );
-  const [page, setPage] = useState<Page | null>(null);
-  const [tab, setTab] = useState("preview");
+  const [page, setPage] = useState<ConvertedPage | null>(null);
+  const [resultKey, setResultKey] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [promptOpen, setPromptOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +52,7 @@ export function UrlConverter({ initialUrl = "" }: { initialUrl?: string }) {
       if (id !== requestId.current) return;
       if (res.ok) {
         setPage(body);
-        setTab("preview");
+        setResultKey(id); // 변환할 때마다 탭을 "미리보기"로 되돌린다
         setStatus("result");
       } else {
         setStatus(body.error === "empty" ? "nocontent" : "fetchfail");
@@ -85,7 +81,6 @@ export function UrlConverter({ initialUrl = "" }: { initialUrl?: string }) {
     setPage(null);
     setPrompt("");
     setPromptOpen(false);
-    setTab("preview");
     setStatus("idle");
     setQuery("");
     inputRef.current?.focus();
@@ -189,60 +184,20 @@ export function UrlConverter({ initialUrl = "" }: { initialUrl?: string }) {
       )}
 
       {status === "result" && page && (
-        <article className="flex flex-col gap-3.5 border-t pt-5">
-          <div className="flex items-start justify-between gap-3 max-sm:flex-col">
-            <header className="flex min-w-0 flex-col gap-1">
-              <h2 className="text-[22px] leading-snug font-semibold text-balance">
-                {page.title}
-              </h2>
-              <Byline page={page} />
-            </header>
-            <ExportActions title={page.title} markdown={page.markdown} prompt={prompt} />
-          </div>
+        <ArticleResult
+          key={resultKey}
+          page={page}
+          prompt={prompt}
+          actions={resultActions?.(page)}
+        >
           <PromptPanel
             open={promptOpen}
             onOpenChange={setPromptOpen}
             prompt={prompt}
             onPromptChange={setPrompt}
           />
-          <Tabs value={tab} onValueChange={setTab} className="gap-3.5">
-            <TabsList>
-              <TabsTrigger value="preview">미리보기</TabsTrigger>
-              <TabsTrigger value="raw">Markdown</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {tab === "preview" ? (
-            <MarkdownView markdown={page.markdown} />
-          ) : (
-            <pre className="max-h-[560px] overflow-auto rounded-md border bg-muted/40 px-4 py-3.5 font-mono text-[13px] leading-relaxed wrap-anywhere whitespace-pre-wrap">
-              {page.markdown}
-            </pre>
-          )}
-        </article>
+        </ArticleResult>
       )}
-    </div>
-  );
-}
-
-function Byline({ page }: { page: Page }) {
-  const names = page.author
-    ? [page.author, page.site !== page.author ? page.site : ""]
-    : [page.site];
-  return (
-    <div className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
-      {names.filter(Boolean).map((name) => (
-        <span key={name} className="after:ml-1.5 after:content-['·']">
-          {name}
-        </span>
-      ))}
-      <a
-        href={page.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="break-all underline underline-offset-3"
-      >
-        {page.url.replace(/^https?:\/\//, "")}
-      </a>
     </div>
   );
 }
