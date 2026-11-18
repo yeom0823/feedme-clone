@@ -86,7 +86,7 @@ export function ExportActions({ title, markdown, prompt }: Props) {
   }
 
   return (
-    <div className="flex flex-none flex-col items-end gap-1 max-sm:items-stretch max-sm:self-stretch">
+    <div className="flex flex-none flex-col items-end gap-1 max-sm:flex-1 max-sm:items-stretch">
       <ButtonGroup className="max-sm:w-full">
         <Button variant="outline" size="sm" className="max-sm:flex-1" onClick={copy}>
           {copied ? <CheckIcon /> : <CopyIcon />}
