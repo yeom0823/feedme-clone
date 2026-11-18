@@ -1,3 +1,4 @@
+import { AuthLink } from "@/features/auth/components/auth-link";
 import { UrlConverter } from "@/features/url-to-markdown/components/url-converter";
 import { ThemeToggle } from "@/features/url-to-markdown/components/theme-toggle";
 
@@ -8,7 +9,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const initialUrl = typeof url === "string" ? url : "";
   return (
     <div className="mx-auto flex w-full max-w-190 flex-1 flex-col gap-5 px-4 pt-3">
-      <header className="flex justify-end">
+      <header className="flex items-center justify-end gap-1">
+        <AuthLink />
         <ThemeToggle />
       </header>
       <main className="flex flex-1 flex-col gap-5">

@@ -1,0 +1,1 @@
+- Supabase advisors: Auth의 유출 비밀번호 차단(Leaked Password Protection)이 꺼져 있음. 운영 하드닝 범위라 이번 설정에서 제외함. https://supabase.com/docs/guides/auth/password-security
